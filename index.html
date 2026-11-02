@@ -1,24 +1,318 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<!-- HTML Codes by Quackit.com -->
-<title>
-ELNKOSC: The Pragmatic Programmer</title>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="keywords" content="github stromer ebike api python crypto
-">
-<meta name="description" content="ELNKOSC's GitHub Repo
-">
+<title>ELNKOSC: The Pragmatic Programmer</title>
+<meta name="description" content="ELNKOSC's GitHub Repo">
+<meta name="keywords" content="github, stromer, ebike, api, python, crypto">
+<meta name="theme-color" content="#000000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
 <style>
-body {background-color:#ffffff;background-repeat:no-repeat;background-position:top left;background-attachment:fixed;}
-h1{font-family:Arial, sans-serif;color:#000000;background-color:#ffffff;}
-p {font-family:Georgia, serif;font-size:14px;font-style:italic;font-weight:bold;color:#000000;background-color:#ffffff;}
+  :root {
+    --black: #000000;
+    --dark-green: #003b00;
+    --green: #008f11;
+    --matrix: #00ff41;
+    --glow: rgba(0, 255, 65, 0.65);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--black);
+    color: var(--matrix);
+    overflow: hidden;
+  }
+
+  body {
+    font-family: "Share Tech Mono", "Courier New", monospace;
+  }
+
+  #rain {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    z-index: 0;
+  }
+
+  /* CRT scanlines + vignette */
+  body::before,
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+  body::before {
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0) 0px,
+      rgba(0, 0, 0, 0) 2px,
+      rgba(0, 0, 0, 0.25) 3px
+    );
+  }
+  body::after {
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.85) 100%);
+  }
+
+  main {
+    position: relative;
+    z-index: 1;
+    min-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .terminal {
+    width: min(760px, 100%);
+    padding: clamp(20px, 5vw, 44px);
+    background: rgba(0, 10, 0, 0.82);
+    border: 1px solid var(--green);
+    box-shadow:
+      0 0 18px rgba(0, 255, 65, 0.25),
+      inset 0 0 40px rgba(0, 59, 0, 0.6);
+    backdrop-filter: blur(2px);
+  }
+
+  .prompt {
+    margin: 0 0 18px;
+    font-size: 14px;
+    color: var(--green);
+    letter-spacing: 0.08em;
+  }
+
+  h1 {
+    margin: 0 0 28px;
+    font-family: "VT323", "Share Tech Mono", monospace;
+    font-weight: normal;
+    font-size: clamp(34px, 7vw, 64px);
+    line-height: 1;
+    letter-spacing: 0.04em;
+    color: var(--matrix);
+    text-shadow: 0 0 6px var(--glow), 0 0 22px var(--glow);
+    animation: flicker 6s infinite;
+  }
+
+  h1 .sub {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.55em;
+    color: #b6ffc4;
+    text-shadow: 0 0 6px var(--glow);
+  }
+
+  blockquote {
+    margin: 0;
+    padding-left: 16px;
+    border-left: 2px solid var(--green);
+  }
+
+  blockquote p {
+    margin: 0 0 14px;
+    font-size: clamp(16px, 2.6vw, 20px);
+    line-height: 1.55;
+    color: #c8ffd4;
+    text-shadow: 0 0 4px rgba(0, 255, 65, 0.5);
+  }
+
+  blockquote footer {
+    font-size: 14px;
+    color: var(--green);
+  }
+
+  .cursor {
+    display: inline-block;
+    width: 0.6em;
+    height: 1.1em;
+    margin-left: 4px;
+    vertical-align: text-bottom;
+    background: var(--matrix);
+    box-shadow: 0 0 8px var(--glow);
+    animation: blink 1s steps(1) infinite;
+  }
+
+  /* Typing effect: hidden until revealed by JS (only when JS runs) */
+  .js [data-type] { visibility: hidden; }
+  .js [data-type].typing,
+  .js [data-type].typed { visibility: visible; }
+
+  @keyframes blink { 50% { opacity: 0; } }
+
+  @keyframes flicker {
+    0%, 92%, 100% { opacity: 1; }
+    93% { opacity: 0.6; }
+    94% { opacity: 1; }
+    96% { opacity: 0.75; }
+    97% { opacity: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    h1, .cursor { animation: none; }
+  }
 </style>
+<script>document.documentElement.classList.add("js");</script>
 </head>
 <body>
-<h1>ELNKOSC: The Pragmatic Programmer</h1>
-<p></p>
-<p>“Now I'm a pretty lazy person and am prepared to work quite hard in order to avoid work.”</p>
-<p>― Martin Fowler, Refactoring: Improving the Design of Existing Code</p>
+<canvas id="rain" aria-hidden="true"></canvas>
+
+<main>
+  <section class="terminal">
+    <p class="prompt" aria-hidden="true">&gt; root@elnkosc:~$ ./wake_up --neo</p>
+
+    <h1 data-type>ELNKOSC:<span class="sub">The Pragmatic Programmer</span></h1>
+
+    <blockquote>
+      <p data-type>“Now I'm a pretty lazy person and am prepared to work quite hard in order to avoid work.”</p>
+      <footer data-type>― Martin Fowler, Refactoring: Improving the Design of Existing Code</footer>
+    </blockquote>
+    <span class="cursor" aria-hidden="true"></span>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var reduceMotion = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- Digital rain ---------- */
+  var canvas = document.getElementById("rain");
+  var ctx = canvas.getContext("2d");
+  var glyphs = (
+    "ｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ" +
+    "0123456789Z:・.\"=*+-<>¦｜╌ç"
+  ).split("");
+  var fontSize, columns, drops, speeds;
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fontSize = window.innerWidth < 600 ? 14 : 18;
+    columns = Math.ceil(window.innerWidth / fontSize);
+    drops = [];
+    speeds = [];
+    for (var i = 0; i < columns; i++) {
+      drops[i] = Math.random() * -(window.innerHeight / fontSize);
+      speeds[i] = 0.35 + Math.random() * 0.75;
+    }
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  }
+
+  function randomGlyph() {
+    return glyphs[(Math.random() * glyphs.length) | 0];
+  }
+
+  function draw() {
+    var w = window.innerWidth, h = window.innerHeight;
+    // translucent black leaves fading trails
+    ctx.fillStyle = "rgba(0, 0, 0, 0.07)";
+    ctx.fillRect(0, 0, w, h);
+    ctx.font = fontSize + "px 'Share Tech Mono', monospace";
+    ctx.textBaseline = "top";
+
+    for (var i = 0; i < columns; i++) {
+      var x = i * fontSize;
+      var y = Math.floor(drops[i]) * fontSize;
+
+      // body of the stream
+      ctx.fillStyle = Math.random() > 0.9 ? "#00ff41" : "#008f11";
+      ctx.fillText(randomGlyph(), x, y - fontSize);
+
+      // bright, glowing leading character
+      ctx.shadowColor = "#00ff41";
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = "#d9ffe2";
+      ctx.fillText(randomGlyph(), x, y);
+      ctx.shadowBlur = 0;
+
+      drops[i] += speeds[i];
+      if (y > h && Math.random() > 0.975) {
+        drops[i] = 0;
+        speeds[i] = 0.35 + Math.random() * 0.75;
+      }
+    }
+  }
+
+  function staticRain() {
+    // Reduced motion: a single still frame of scattered glyphs
+    ctx.font = fontSize + "px 'Share Tech Mono', monospace";
+    ctx.textBaseline = "top";
+    for (var i = 0; i < columns; i++) {
+      var len = (Math.random() * 25) | 0;
+      var start = (Math.random() * (window.innerHeight / fontSize)) | 0;
+      for (var j = 0; j < len; j++) {
+        ctx.fillStyle = "rgba(0, 143, 17," + (j / len) * 0.8 + ")";
+        ctx.fillText(randomGlyph(), i * fontSize, (start + j) * fontSize);
+      }
+    }
+  }
+
+  resize();
+  window.addEventListener("resize", function () {
+    resize();
+    if (reduceMotion) staticRain();
+  });
+
+  if (reduceMotion) {
+    staticRain();
+  } else {
+    var last = 0;
+    (function loop(t) {
+      if (t - last > 33) { draw(); last = t; } // ~30 fps
+      requestAnimationFrame(loop);
+    })(0);
+  }
+
+  /* ---------- Typing effect ---------- */
+  var targets = Array.prototype.slice.call(document.querySelectorAll("[data-type]"));
+
+  function typeNode(el, done) {
+    // Collect text nodes, blank them, then refill char by char
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    var nodes = [], n;
+    while ((n = walker.nextNode())) {
+      nodes.push({ node: n, text: n.nodeValue });
+      n.nodeValue = "";
+    }
+    el.classList.add("typing");
+    var ni = 0, ci = 0;
+    (function step() {
+      if (ni >= nodes.length) {
+        el.classList.remove("typing");
+        el.classList.add("typed");
+        return setTimeout(done, 350);
+      }
+      var cur = nodes[ni];
+      ci++;
+      cur.node.nodeValue = cur.text.slice(0, ci);
+      if (ci >= cur.text.length) { ni++; ci = 0; }
+      setTimeout(step, 22 + Math.random() * 45);
+    })();
+  }
+
+  if (reduceMotion) {
+    targets.forEach(function (el) { el.classList.add("typed"); });
+  } else {
+    var idx = 0;
+    (function next() {
+      if (idx < targets.length) typeNode(targets[idx++], next);
+    })();
+  }
+})();
+</script>
 </body>
 </html>
