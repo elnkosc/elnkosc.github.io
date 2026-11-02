@@ -84,6 +84,30 @@
     backdrop-filter: blur(2px);
   }
 
+  /* Coat-of-arms watermark, centred behind the text */
+  .terminal { position: relative; overflow: hidden; }
+  .terminal > :not(.crest) { position: relative; z-index: 1; }
+  .crest {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    height: 92%;
+    max-width: 80%;
+    object-fit: contain;
+    transform: translate(-50%, -50%);
+    opacity: 0.16;
+    filter: drop-shadow(0 0 10px rgba(0, 255, 65, 0.6));
+    pointer-events: none;
+    user-select: none;
+    z-index: 0;
+    animation: crest-pulse 7s ease-in-out infinite;
+  }
+
+  @keyframes crest-pulse {
+    0%, 100% { opacity: 0.14; }
+    50% { opacity: 0.22; }
+  }
+
   .prompt {
     margin: 0 0 18px;
     font-size: 14px;
@@ -157,7 +181,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    h1, .cursor { animation: none; }
+    h1, .cursor, .crest { animation: none; }
   }
 </style>
 <script>document.documentElement.classList.add("js");</script>
@@ -167,6 +191,7 @@
 
 <main>
   <section class="terminal">
+    <img class="crest" src="img/crest.png" alt="" aria-hidden="true">
     <p class="prompt" aria-hidden="true">&gt; root@elnkosc:~$ ./wake_up --neo</p>
 
     <h1 data-type>ELNKOSC:<span class="sub">The Pragmatic Programmer</span></h1>
