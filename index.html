@@ -42,6 +42,18 @@
     z-index: 0;
   }
 
+  /* Game layer: played faintly behind the text like a watermark */
+  #game {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    z-index: 1;
+    opacity: 0.75;
+    pointer-events: none;
+  }
+
   /* CRT scanlines + vignette */
   body::before,
   body::after {
@@ -49,7 +61,7 @@
     position: fixed;
     inset: 0;
     pointer-events: none;
-    z-index: 2;
+    z-index: 3;
   }
   body::before {
     background: repeating-linear-gradient(
@@ -65,7 +77,7 @@
 
   main {
     position: relative;
-    z-index: 1;
+    z-index: 2;
     min-height: 100%;
     display: flex;
     align-items: center;
@@ -76,12 +88,11 @@
   .terminal {
     width: min(760px, 100%);
     padding: clamp(20px, 5vw, 44px);
-    background: rgba(0, 10, 0, 0.82);
+    background: rgba(0, 10, 0, 0.6);
     border: 1px solid var(--green);
     box-shadow:
       0 0 18px rgba(0, 255, 65, 0.25),
       inset 0 0 40px rgba(0, 59, 0, 0.6);
-    backdrop-filter: blur(2px);
   }
 
   /* Coat-of-arms watermark, centred behind the text */
@@ -188,6 +199,7 @@
 </head>
 <body>
 <canvas id="rain" aria-hidden="true"></canvas>
+<canvas id="game" aria-hidden="true"></canvas>
 
 <main>
   <section class="terminal">
@@ -337,6 +349,263 @@
       if (idx < targets.length) typeNode(targets[idx++], next);
     })();
   }
+})();
+</script>
+<script>
+/* ---------- "Glitch Defender": a small shooter played in the watermark layer ---------- */
+(function () {
+  "use strict";
+
+  var canvas = document.getElementById("game");
+  var ctx = canvas.getContext("2d");
+  var reduceMotion = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var GLYPHS = "ｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ01".split("");
+  var W, H, cell;
+  var keys = { left: false, right: false, fire: false };
+  var mode = "demo";            // "demo" | "play" | "over"
+  var player, shots, bombs, glitches, sparks, score, lives, wave, cooldown, idleTimer, overTimer, invuln;
+
+  function glyph() { return GLYPHS[(Math.random() * GLYPHS.length) | 0]; }
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.floor(W * dpr); canvas.height = Math.floor(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cell = W < 600 ? 9 : 12;
+    if (player) player.y = H - cell * 4;
+  }
+
+  function reset() {
+    player = { x: W / 2, y: H - cell * 4, speed: 0 };
+    shots = []; bombs = []; glitches = []; sparks = [];
+    score = 0; lives = 3; wave = 0; cooldown = 0; invuln = 0;
+    nextWave();
+  }
+
+  function nextWave() {
+    wave++;
+    var count = Math.min(6 + wave * 2, 22);
+    for (var i = 0; i < count; i++) {
+      glitches.push({
+        x: cell * 3 + Math.random() * (W - cell * 6),
+        y: -cell * 3 - Math.random() * H * 0.3,
+        vy: 0.25 + Math.random() * 0.25 + wave * 0.06,
+        phase: Math.random() * Math.PI * 2,
+        sway: 0.6 + Math.random() * 1.4,
+        cells: [glyph(), glyph(), glyph(), glyph()],
+        hp: Math.random() < Math.min(0.1 * wave, 0.5) ? 2 : 1
+      });
+    }
+  }
+
+  function explode(x, y) {
+    for (var i = 0; i < 14; i++) {
+      var a = Math.random() * Math.PI * 2, s = 1 + Math.random() * 3;
+      sparks.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 30, g: glyph() });
+    }
+  }
+
+  function hitPlayer() {
+    if (invuln > 0) return;
+    explode(player.x, player.y);
+    lives--; invuln = 90;
+    if (lives <= 0) {
+      if (mode === "play") { mode = "over"; overTimer = 0; }
+      else reset();
+    }
+  }
+
+  function fire() {
+    if (cooldown > 0) return;
+    shots.push({ x: player.x, y: player.y - cell * 1.5 });
+    cooldown = 14;
+  }
+
+  function autopilot() {
+    // Demo mode: chase the lowest glitch and shoot at it
+    var target = null;
+    for (var i = 0; i < glitches.length; i++) {
+      var g = glitches[i];
+      if (g.y > 0 && (!target || g.y > target.y)) target = g;
+    }
+    var dx = target ? target.gx - player.x : W / 2 - player.x;
+    keys.left = dx < -cell; keys.right = dx > cell;
+    keys.fire = !!target && Math.abs(dx) < cell * 2;
+  }
+
+  function update() {
+    if (mode === "demo") autopilot();
+    if (mode === "over") {
+      overTimer++;
+      if (overTimer > 60 * 10) { mode = "demo"; reset(); }
+      return;
+    }
+    if (mode === "play" && ++idleTimer > 60 * 30) { mode = "demo"; reset(); }
+
+    var accel = 0.9, max = 7;
+    if (keys.left) player.speed = Math.max(player.speed - accel, -max);
+    else if (keys.right) player.speed = Math.min(player.speed + accel, max);
+    else player.speed *= 0.75;
+    player.x = Math.max(cell * 2, Math.min(W - cell * 2, player.x + player.speed));
+    if (keys.fire) fire();
+    if (cooldown > 0) cooldown--;
+    if (invuln > 0) invuln--;
+
+    var i, j;
+    for (i = shots.length - 1; i >= 0; i--) {
+      shots[i].y -= 10;
+      if (shots[i].y < -20) shots.splice(i, 1);
+    }
+    for (i = bombs.length - 1; i >= 0; i--) {
+      var b = bombs[i];
+      b.y += 3.2;
+      if (Math.abs(b.x - player.x) < cell * 1.5 && Math.abs(b.y - player.y) < cell) { bombs.splice(i, 1); hitPlayer(); continue; }
+      if (b.y > H + 20) bombs.splice(i, 1);
+    }
+    for (i = glitches.length - 1; i >= 0; i--) {
+      var g = glitches[i];
+      g.phase += 0.03;
+      g.y += g.vy;
+      g.gx = g.x + Math.sin(g.phase) * cell * 4 * g.sway;
+      if (Math.random() < 0.04) g.cells[(Math.random() * 4) | 0] = glyph();
+      if (g.y > cell && Math.random() < 0.0015 + wave * 0.0004) bombs.push({ x: g.gx, y: g.y + cell, g: glyph() });
+
+      for (j = shots.length - 1; j >= 0; j--) {
+        if (Math.abs(shots[j].x - g.gx) < cell * 1.3 && Math.abs(shots[j].y - g.y) < cell * 1.3) {
+          shots.splice(j, 1);
+          if (--g.hp <= 0) { explode(g.gx, g.y); glitches.splice(i, 1); score += 10 * wave; }
+          break;
+        }
+      }
+      if (glitches[i] !== g) continue;
+      if (g.y > player.y - cell) {
+        glitches.splice(i, 1);
+        if (Math.abs(g.gx - player.x) < cell * 3) hitPlayer(); else score = Math.max(0, score - 5);
+      }
+    }
+    for (i = sparks.length - 1; i >= 0; i--) {
+      var s = sparks[i];
+      s.x += s.vx; s.y += s.vy; s.vy += 0.05;
+      if (--s.life <= 0) sparks.splice(i, 1);
+    }
+    if (!glitches.length) nextWave();
+  }
+
+  function text(str, x, y, size, color, align) {
+    ctx.font = size + "px 'VT323', 'Share Tech Mono', monospace";
+    ctx.textAlign = align || "left";
+    ctx.fillStyle = color;
+    ctx.fillText(str, x, y);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "#00ff41";
+    ctx.shadowBlur = 10;
+    var i;
+
+    // Glitches: 2x2 blocks of flickering glyphs
+    ctx.font = (cell * 1.3) + "px 'Share Tech Mono', monospace";
+    ctx.textAlign = "center";
+    for (i = 0; i < glitches.length; i++) {
+      var g = glitches[i];
+      ctx.fillStyle = "rgba(0, 12, 0, 0.9)";
+      ctx.fillRect(g.gx - cell * 1.6, g.y - cell * 1.6, cell * 3.2, cell * 3.2);
+      ctx.strokeStyle = g.hp > 1 ? "#d9ffe2" : "#00ff41";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(g.gx - cell * 1.6, g.y - cell * 1.6, cell * 3.2, cell * 3.2);
+      ctx.fillStyle = g.hp > 1 ? "#d9ffe2" : "#00ff41";
+      ctx.fillText(g.cells[0], g.gx - cell * 0.7, g.y - cell * 0.7);
+      ctx.fillText(g.cells[1], g.gx + cell * 0.7, g.y - cell * 0.7);
+      ctx.fillText(g.cells[2], g.gx - cell * 0.7, g.y + cell * 0.7);
+      ctx.fillText(g.cells[3], g.gx + cell * 0.7, g.y + cell * 0.7);
+    }
+
+    // Shots and bombs
+    ctx.fillStyle = "#d9ffe2";
+    for (i = 0; i < shots.length; i++) ctx.fillRect(shots[i].x - 1, shots[i].y - cell, 2, cell * 1.4);
+    ctx.fillStyle = "#00ff41";
+    for (i = 0; i < bombs.length; i++) ctx.fillText(bombs[i].g, bombs[i].x, bombs[i].y);
+
+    // Sparks
+    for (i = 0; i < sparks.length; i++) {
+      ctx.globalAlpha = sparks[i].life / 30;
+      ctx.fillText(sparks[i].g, sparks[i].x, sparks[i].y);
+    }
+    ctx.globalAlpha = 1;
+
+    // Player: a chevron-shaped "cursor ship"
+    if (mode !== "over" && (invuln === 0 || (invuln >> 3) % 2 === 0)) {
+      var x = player.x, y = player.y, c = cell;
+      ctx.fillStyle = "#d9ffe2";
+      ctx.beginPath();
+      ctx.moveTo(x, y - c * 1.4);
+      ctx.lineTo(x + c * 1.8, y + c);
+      ctx.lineTo(x + c * 0.6, y + c * 0.4);
+      ctx.lineTo(x - c * 0.6, y + c * 0.4);
+      ctx.lineTo(x - c * 1.8, y + c);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // HUD
+    ctx.shadowBlur = 6;
+    var hud = W < 600 ? 18 : 24;
+    text("SCORE " + ("00000" + score).slice(-6), 16, hud, hud, "#00ff41");
+    text("WAVE " + wave + "   " + new Array(Math.max(lives, 0) + 1).join("▮ "), W - 16, hud, hud, "#00ff41", "right");
+    if (mode === "demo") {
+      text("← → BEWEGEN  ·  SPATIE SCHIETEN", W / 2, H - cell * 1.3, hud * 0.8, "#008f11", "center");
+    } else if (mode === "over") {
+      text("GAME OVER", W / 2, H * 0.82, hud * 2, "#00ff41", "center");
+      text("SPATIE = OPNIEUW", W / 2, H * 0.82 + hud * 1.6, hud * 0.9, "#008f11", "center");
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  function onKey(e, down) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = e.key;
+    var map = { ArrowLeft: "left", ArrowRight: "right", " ": "fire", Spacebar: "fire" };
+    if (!map[k]) return;
+    e.preventDefault();
+    if (down && (mode === "demo" || (mode === "over" && map[k] === "fire"))) {
+      mode = "play"; reset();
+      keys.left = keys.right = keys.fire = false;
+      start();
+    }
+    if (mode === "play") { keys[map[k]] = down; idleTimer = 0; }
+  }
+
+  var running = false, last = 0;
+  function loop(t) {
+    // fixed ~60 updates per second, independent of display refresh rate
+    if (!last) last = t;
+    var steps = Math.min(5, Math.floor((t - last) / 16.67));
+    for (var i = 0; i < steps; i++) update();
+    if (steps) last += steps * 16.67;
+    draw();
+    if (reduceMotion && mode === "demo") { running = false; ctx.clearRect(0, 0, W, H); return; }
+    requestAnimationFrame(loop);
+  }
+  function start() {
+    if (running) return;
+    running = true; last = 0;
+    requestAnimationFrame(loop);
+  }
+
+  resize();
+  reset();
+  idleTimer = 0;
+  window.addEventListener("resize", resize);
+  window.addEventListener("keydown", function (e) { onKey(e, true); });
+  window.addEventListener("keyup", function (e) { onKey(e, false); });
+  window.addEventListener("blur", function () { keys.left = keys.right = keys.fire = false; });
+
+  // With reduced motion the demo does not run; pressing a key starts a game.
+  if (!reduceMotion) start();
 })();
 </script>
 </body>
